@@ -1,0 +1,31 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Source code
+*.cs text diff=csharp
+*.csproj text
+*.sln text
+*.json text
+*.xml text
+*.config text
+*.md text
+
+# Scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Docker
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Binary files
+*.dll binary
+*.exe binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.7z binary
+*.rar binary

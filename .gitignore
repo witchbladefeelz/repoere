@@ -1,0 +1,95 @@
+# .NET Build outputs
+bin/
+obj/
+out/
+*.dll
+*.exe
+*.pdb
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+*.rsuser
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET Core
+project.assets.json
+project.fragment.lock.json
+artifacts/
+
+# Rider
+.idea/
+*.sln.iml
+
+# User secrets and sensitive data
+appsettings.Development.json
+appsettings.Production.json
+secrets.json
+*.pfx
+*.p12
+
+# Docker volumes and data
+mysql_data/
+mariadb_data/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Application specific
+uploads/
+downloads/
+temp/
+*.zip
+*.rar
+*.7z
+
+# Keep important files
+!.gitignore
+!README.md
+!LICENSE
