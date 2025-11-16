@@ -44,12 +44,51 @@ function rsa_sign_base64(string $data, string $private_pem): ?string {
     return $ok ? base64_encode($signature) : null;
 }
 
+function rsa_encrypt_private(string $data, string $private_pem): ?string {
+    $pkey = openssl_pkey_get_private($private_pem);
+    if ($pkey === false) return null;
+
+    $encrypted = '';
+    $chunks = str_split($data, 200); // RSA can encrypt ~245 bytes with 2048-bit key
+
+    foreach ($chunks as $chunk) {
+        $ok = openssl_private_encrypt($chunk, $encrypted_chunk, $pkey);
+        if (!$ok) {
+            openssl_free_key($pkey);
+            return null;
+        }
+        $encrypted .= $encrypted_chunk;
+    }
+
+    openssl_free_key($pkey);
+    return base64_encode($encrypted);
+}
+
+function send_encrypted_response(array $response_data, string $private_pem) {
+    $json_response = json_encode($response_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $encrypted_data = rsa_encrypt_private($json_response, $private_pem);
+
+    if ($encrypted_data === null) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Encryption failed']);
+        exit;
+    }
+
+    echo json_encode([
+        'encrypted' => true,
+        'data' => $encrypted_data
+    ]);
+}
+
 try {
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
     http_response_code(500);
-    echo json_encode(['valid' => false, 'message' => 'Database connection failed']);
+    send_encrypted_response([
+        'valid' => false,
+        'message' => 'Database connection failed'
+    ], $PRIVATE_KEY_PEM);
     exit;
 }
 
@@ -58,17 +97,26 @@ $nonce = trim($_REQUEST['nonce'] ?? '');
 
 if ($hwid === '') {
     http_response_code(400);
-    echo json_encode(['valid' => false, 'message' => 'HWID not specified']);
+    send_encrypted_response([
+        'valid' => false,
+        'message' => 'HWID not specified'
+    ], $PRIVATE_KEY_PEM);
     exit;
 }
 if ($nonce === '') {
     http_response_code(400);
-    echo json_encode(['valid' => false, 'message' => 'Nonce not specified']);
+    send_encrypted_response([
+        'valid' => false,
+        'message' => 'Nonce not specified'
+    ], $PRIVATE_KEY_PEM);
     exit;
 }
 if (strlen($hwid) > 255 || strlen($nonce) > 255) {
     http_response_code(400);
-    echo json_encode(['valid' => false, 'message' => 'Parameters too long']);
+    send_encrypted_response([
+        'valid' => false,
+        'message' => 'Parameters too long'
+    ], $PRIVATE_KEY_PEM);
     exit;
 }
 
@@ -83,7 +131,7 @@ try {
         $signed_string = "{$hwid}||0|{$nonce}|{$timestamp}";
         $signature = rsa_sign_base64($signed_string, $PRIVATE_KEY_PEM);
 
-        echo json_encode([
+        $response_data = [
             'valid' => false,
             'message' => 'HWID not found',
             'hwid' => $hwid,
@@ -94,7 +142,9 @@ try {
             'timestamp' => $timestamp,
             'nonce' => $nonce,
             'signature' => $signature
-        ]);
+        ];
+
+        send_encrypted_response($response_data, $PRIVATE_KEY_PEM);
         exit;
     }
 
@@ -111,11 +161,14 @@ try {
 
     if ($signature_b64 === null) {
         http_response_code(500);
-        echo json_encode(['valid' => false, 'message' => 'Signing failed']);
+        send_encrypted_response([
+            'valid' => false,
+            'message' => 'Signing failed'
+        ], $PRIVATE_KEY_PEM);
         exit;
     }
 
-    $response = [
+    $response_data = [
         'valid' => $is_valid,
         'message' => $is_valid ? 'Subscription valid' : ($is_banned ? 'User banned' : 'Subscription expired'),
         'hwid' => $hwid,
@@ -128,11 +181,14 @@ try {
         'signature' => $signature_b64
     ];
 
-    echo json_encode($response, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    send_encrypted_response($response_data, $PRIVATE_KEY_PEM);
     exit;
 
 } catch(PDOException $e) {
     http_response_code(500);
-    echo json_encode(['valid' => false, 'message' => 'Database error']);
+    send_encrypted_response([
+        'valid' => false,
+        'message' => 'Database error'
+    ], $PRIVATE_KEY_PEM);
     exit;
 }

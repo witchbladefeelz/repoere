@@ -3,9 +3,9 @@ header('Content-Type: application/json; charset=utf-8');
 
 $host = getenv('DB_HOST') ?: 'localhost';
 $port = getenv('DB_PORT') ?: '3306';
-$dbname = getenv('DB_NAME') ?: 'syntara';
-$username = getenv('DB_USER') ?: 'hwid';
-$password = getenv('DB_PASSWORD') ?: 'hwidpass';
+$dbname = getenv('DB_NAME') ?: 'sentinel';
+$username = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASSWORD') ?: '';
 
 $PRIVATE_KEY_PEM = "-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDHgjyFx9AhcE1M
@@ -44,6 +44,42 @@ function rsa_sign_base64(string $data, string $private_pem): ?string {
     return $ok ? base64_encode($signature) : null;
 }
 
+function rsa_encrypt_private(string $data, string $private_pem): ?string {
+    $pkey = openssl_pkey_get_private($private_pem);
+    if ($pkey === false) return null;
+
+    $encrypted = '';
+    $chunks = str_split($data, 200); // RSA can encrypt ~245 bytes with 2048-bit key
+
+    foreach ($chunks as $chunk) {
+        $ok = openssl_private_encrypt($chunk, $encrypted_chunk, $pkey);
+        if (!$ok) {
+            openssl_free_key($pkey);
+            return null;
+        }
+        $encrypted .= $encrypted_chunk;
+    }
+
+    openssl_free_key($pkey);
+    return base64_encode($encrypted);
+}
+
+function send_encrypted_response(array $response_data, string $private_pem) {
+    $json_response = json_encode($response_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $encrypted_data = rsa_encrypt_private($json_response, $private_pem);
+
+    if ($encrypted_data === null) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Encryption failed']);
+        exit;
+    }
+
+    echo json_encode([
+        'encrypted' => true,
+        'data' => $encrypted_data
+    ]);
+}
+
 try {
     $pdo = new PDO("mysql:host=$host;port=$port;dbname=$dbname;charset=utf8", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -74,8 +110,11 @@ try {
     $subscription = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$subscription) {
         $pdo->rollBack();
-        http_response_code(404);
-        die(json_encode(['success' => false, 'message' => 'Invalid subscription key']));
+        send_encrypted_response([
+            'success' => false,
+            'message' => 'Invalid subscription key'
+        ], $PRIVATE_KEY_PEM);
+        exit;
     }
 
     $user_id = $subscription['id'];
@@ -88,8 +127,11 @@ try {
     if ($existing_user) {
         if ((bool)$existing_user['banned']) {
             $pdo->rollBack();
-            http_response_code(403);
-            die(json_encode(['success' => false, 'message' => 'User is banned']));
+            send_encrypted_response([
+                'success' => false,
+                'message' => 'User is banned'
+            ], $PRIVATE_KEY_PEM);
+            exit;
         }
 
         if ($existing_user['hwid'] !== $hwid) {
@@ -121,7 +163,7 @@ try {
     $signed_string = "{$hwid}|{$expiry_iso}|1|{$nonce}|{$timestamp}";
     $signature_b64 = rsa_sign_base64($signed_string, $PRIVATE_KEY_PEM);
 
-    echo json_encode([
+    $response_data = [
         'success' => true,
         'message' => $is_new_user ? 'Subscription activated successfully' : 'Subscription extended successfully',
         'user' => [
@@ -134,10 +176,14 @@ try {
         'nonce' => $nonce,
         'timestamp' => $timestamp,
         'signature' => $signature_b64
-    ]);
+    ];
+
+    send_encrypted_response($response_data, $PRIVATE_KEY_PEM);
 
 } catch(PDOException $e) {
     $pdo->rollBack();
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database error']);
+    send_encrypted_response([
+        'success' => false,
+        'message' => 'Database error'
+    ], $PRIVATE_KEY_PEM);
 }
