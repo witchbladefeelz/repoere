@@ -1,20 +1,44 @@
 services:
-  hwid-app:
+  mariadb:
     build: .
-    container_name: hwid-app
+    container_name: hwid-mariadb
     ports:
-      - "8080:8080"
       - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: your_root_password
+      MYSQL_ROOT_PASSWORD: rootpass
       MYSQL_DATABASE: syntara
       MYSQL_USER: hwid
       MYSQL_PASSWORD: hwidpass
-      BOT_TOKEN: ""
     volumes:
       - hwid-db:/var/lib/mysql
     restart: unless-stopped
+    networks:
+      - hwid-network
+
+  php-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    container_name: hwid-php-api
+    ports:
+      - "8080:80"
+    volumes:
+      - ./php:/var/www/html
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: syntara
+      DB_USER: hwid
+      DB_PASSWORD: hwidpass
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    networks:
+      - hwid-network
 
 volumes:
   hwid-db:
 
+networks:
+  hwid-network:
+    driver: bridge
