@@ -98,8 +98,7 @@ public class AdminBotUpdateHandler
         var chatId = message.Chat.Id;
 
         // Check if admin is awaiting input for a pending action
-        var pendingAction = _sessionStore.GetPendingAction(chatId);
-        var isAwaitingInput = !string.IsNullOrEmpty(pendingAction);
+        var isAwaitingInput = _sessionStore.TryGetPendingAction(chatId, out _);
 
         // In groups, only respond to commands (starting with /) OR if awaiting input
         if (message.Chat.Type != Telegram.Bot.Types.Enums.ChatType.Private)
