@@ -80,15 +80,6 @@ public class AdminBotUpdateHandler
             return; // Silently ignore non-admin messages
         }
 
-        // In groups, only respond to commands (starting with /)
-        if (message.Chat.Type != Telegram.Bot.Types.Enums.ChatType.Private)
-        {
-            if (string.IsNullOrEmpty(message.Text) || !message.Text.StartsWith("/"))
-            {
-                return; // Ignore non-command messages in groups
-            }
-        }
-
         // Handle document upload
         if (message.Document is not null)
         {
@@ -104,6 +95,20 @@ public class AdminBotUpdateHandler
         }
 
         var text = message.Text.Trim();
+        var chatId = message.Chat.Id;
+
+        // Check if admin is awaiting input for a pending action
+        var pendingAction = _sessionStore.GetPendingAction(chatId);
+        var isAwaitingInput = !string.IsNullOrEmpty(pendingAction);
+
+        // In groups, only respond to commands (starting with /) OR if awaiting input
+        if (message.Chat.Type != Telegram.Bot.Types.Enums.ChatType.Private)
+        {
+            if (!isAwaitingInput && (string.IsNullOrEmpty(text) || !text.StartsWith("/")))
+            {
+                return; // Ignore non-command messages in groups (unless awaiting input)
+            }
+        }
 
         if (text.StartsWith("/"))
         {
